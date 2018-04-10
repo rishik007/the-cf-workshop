@@ -1,3 +1,5 @@
+Description: Deploys an Auto Scaling Group of webservers with a load balancer
+
 Parameters:
   DesiredCapacity:
     Description: desired capacity of webservers in the auto scaling group
@@ -12,7 +14,50 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
     Default: subnet-ca8a8d87
 
+
 Resources:
+  loadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: load balancer security group
+      SecurityGroupIngress:
+        -
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+
+  loadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      CrossZone: true
+      Listeners:
+        -
+          InstancePort: 80
+          InstanceProtocol: HTTP
+          LoadBalancerPort: 80
+          Protocol: HTTP
+
+      SecurityGroups:
+        - !Sub ${loadBalancerSecurityGroup.GroupId}
+      Subnets:
+        - !Ref PublicSubnetOneId
+        - !Ref PublicSubnetTwoId
+
+  autoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: !Ref DesiredCapacity
+      LaunchConfigurationName: !Ref launchConfiguration
+      LoadBalancerNames:
+        - !Ref loadBalancer
+      MaxSize: !Ref DesiredCapacity
+      MinSize: 0
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetOneId
+        - !Ref PublicSubnetTwoId
+
+        
   launchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -38,59 +83,20 @@ Resources:
             #!/bin/bash -eux
             yum install -y aws-cfn-bootstrap
             /opt/aws/bin/cfn-init -s ${AWS::StackId} -r launchConfiguration --region ${AWS::Region} -v
-   
-  autoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      DesiredCapacity: !Ref DesiredCapacity
-      LaunchConfigurationName: !Ref launchConfiguration
-      LoadBalancerNames:
-        - !Ref loadBalancer
-      MaxSize: !Ref DesiredCapacity
-      MinSize: 0
-      VPCZoneIdentifier:
-        - !Ref PublicSubnetOneId
-        - !Ref PublicSubnetTwoId
-        
-  webServer:
-    Type: AWS::EC2::Instance
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          packages:
-            yum:
-              httpd: []
-
-          services:
-            sysvinit:
-              httpd:
-                enabled: true
-                ensureRunning: true
-
-    Properties:
-      ImageId: ami-25615740
-      InstanceType: t2.micro
-      SecurityGroups:
-        - !Ref securityGroup
-      UserData:
-        Fn::Base64:
-          !Sub |
-            #!/bin/bash -xe
-            yum install -y aws-cfn-bootstrap
-            /opt/aws/bin/cfn-init -s ${AWS::StackId} -r webServer --region ${AWS::Region} -v
 
   securityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: access web application
+      GroupDescription: security group for webserver
       SecurityGroupIngress:
         -
           IpProtocol: tcp
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Sub ${loadBalancerSecurityGroup.GroupId}
           FromPort: 80
           ToPort: 80
 
-
 Outputs:
-  webserverIPAddress:
-    Value: !Sub ${webServer.PublicIp}
+  loadBalancerDNSName:
+    Description: DNS name for the load balancer
+    Value: !Sub ${loadBalancer.DNSName}
+
