@@ -6,9 +6,11 @@ Parameters:
   PublicSubnetOneId:
     Description: A public subnet Id to use for the load balancer
     Type: AWS::EC2::Subnet::Id
+    Default: subnet-2c48d444
   PublicSubnetTwoId:
     Description: A public subnet Id to use for the load balancer, in a different availability zone
     Type: AWS::EC2::Subnet::Id
+    Default: subnet-ca8a8d87
 
 Resources:
   launchConfiguration:
