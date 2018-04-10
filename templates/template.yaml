@@ -1,3 +1,15 @@
+Parameters:
+  DesiredCapacity:
+    Description: desired capacity of webservers in the auto scaling group
+    Type: Number
+    Default: 2
+  PublicSubnetOneId:
+    Description: A public subnet Id to use for the load balancer
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnetTwoId:
+    Description: A public subnet Id to use for the load balancer, in a different availability zone
+    Type: AWS::EC2::Subnet::Id
+
 Resources:
   launchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -24,7 +36,20 @@ Resources:
             #!/bin/bash -eux
             yum install -y aws-cfn-bootstrap
             /opt/aws/bin/cfn-init -s ${AWS::StackId} -r launchConfiguration --region ${AWS::Region} -v
-          
+   
+  autoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: !Ref DesiredCapacity
+      LaunchConfigurationName: !Ref launchConfiguration
+      LoadBalancerNames:
+        - !Ref loadBalancer
+      MaxSize: !Ref DesiredCapacity
+      MinSize: 0
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetOneId
+        - !Ref PublicSubnetTwoId
+        
   webServer:
     Type: AWS::EC2::Instance
     Metadata:
